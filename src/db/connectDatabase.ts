@@ -1,27 +1,18 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 
-const {MONGODB_URI} = process.env;
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/ichgram_db'; 
 
-if(!MONGODB_URI) {
-    throw new Error("MONGODB_URI not deefine in environment variables");
-}
+export const connectDatabase = async (): Promise<void> => {
+    if (!MONGODB_URI) {
+        console.error("Database connection failed: MONGODB_URI is not defined.");
+        process.exit(1);
+    }
 
-const connectDatabase = async(): Promise<void> => {
     try {
-        // await mongoose.connect(MONGODB_URI as string);
         await mongoose.connect(MONGODB_URI);
-        console.log("Successfully connect database");
+        console.log("Database connection successful to Atlas Cluster!");
+    } catch (error) {
+        console.error("Database connection failed:", error);
+        process.exit(1); 
     }
-    catch(error) {
-        if(error instanceof Error) {
-            console.log(`Error connect database: ${error.message}`);
-        }
-        else {
-            console.log("Unkknown error connect database")
-        }
-        
-        throw error;
-    }
-}
-
-export default connectDatabase;
+};

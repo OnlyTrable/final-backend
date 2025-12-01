@@ -1,0 +1,183 @@
+// src/controllers/auth.controller.ts
+
+import type { Request, Response, NextFunction } from 'express';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import User from '../db/models/User.model.js';
+import type { RegisterPayload, LoginPayload } from '../schemas/auth.schemas.js'; 
+
+import { generateTokens } from '../services/token.service.js'; 
+import type { TokenPayload } from '../services/token.service.js';
+
+const SALT_ROUNDS = 12; 
+
+export const register = async (req: Request<{}, {}, RegisterPayload>, res: Response, next: NextFunction) => {
+    try {
+        const { email, password, username, fullName, website, about } = req.body;
+        
+        // 🚨 Ручна перевірка унікальності
+        const existingUser = await User.findOne({ 
+            $or: [{ email: email.toLowerCase() }, { username: username }] 
+        });
+
+        if (existingUser) {
+            const conflictField = existingUser.email === email.toLowerCase() ? 'email' : 'username';
+            const error = new Error('Duplicate Key Error');
+            // @ts-ignore
+            error.code = 11000;
+            // @ts-ignore
+            error.keyValue = { [conflictField]: conflictField === 'email' ? email : username };
+            
+            return next(error); 
+        }
+
+        const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+
+        const newUser = await User.create({
+            email,
+            username,
+            fullName,
+            password: hashedPassword,
+            ...(website !== undefined && { website }), 
+            ...(about !== undefined && { about }),
+        });
+        
+        const { password: _, ...userResponse } = newUser.toObject();
+
+        res.status(201).json({
+            message: "User successfully created and saved to DB.", 
+            user: userResponse,
+        });
+
+    } catch (error) {
+        next(error); 
+    }
+};
+
+
+export const login = async (req: Request<{}, {}, LoginPayload>, res: Response, next: NextFunction) => {
+    try {
+        const { loginId, password } = req.body; 
+
+        // 1. Пошук користувача за email АБО username
+        const user = await User.findOne({ 
+            $or: [
+                { email: loginId.toLowerCase() },
+                { username: { $regex: new RegExp(`^${loginId}$`, 'i') } }
+            ]
+        }).select('+password'); 
+        
+        // 2. Перевірка існування користувача та його пароля
+        if (!user || !(await bcrypt.compare(password, user.password))) {
+            return res.status(401).json({ 
+                message: "Invalid login ID or password."
+            });
+        }
+        
+        // 3. ГЕНЕРУВАННЯ РЕАЛЬНИХ ТОКЕНІВ
+        // 🔥 ВИПРАВЛЕНО: Використовуємо явну типізацію БЕЗ `as any` чи `as { userId: string }`
+        const payload: TokenPayload = { userId: user._id.toString() }; 
+        const { accessToken, refreshToken } = generateTokens(payload);
+
+        // 4. Оновлення користувача в базі (зберігаємо токени)
+        user.accessToken = accessToken; 
+        user.refreshToken = refreshToken;
+        await user.save();
+        
+        // 5. Очищення об'єкта перед відправленням відповіді
+        const userResponse = user.toObject();
+
+        // 6. Успішна відповідь (200 OK)
+        res.status(200).json({
+            message: "Login successful!",
+            user: userResponse,
+        });
+
+    } catch (error) {
+        next(error); 
+    }
+};
+
+export const logout = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = req.userId; // Отримуємо ID від мідлвару authenticate
+
+        if (!userId) {
+            // Ця перевірка є запобіжником, оскільки мідлвар authenticate мав спрацювати
+            return res.status(401).json({ message: "Not authenticated." });
+        }
+
+        // 1. Знаходимо користувача та скидаємо його токени
+        const user = await User.findByIdAndUpdate(
+            userId,
+            {
+                accessToken: "",  // Очищаємо accessToken
+                refreshToken: "", // Очищаємо refreshToken
+            },
+            { new: true } // Повертає оновлений документ
+        );
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found." });
+        }
+
+        // 2. Успішна відповідь
+        res.status(200).json({
+            message: "Successfully logged out. Tokens have been revoked.",
+        });
+
+    } catch (error) {
+        next(error);
+    }
+};
+
+const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || 'your_refresh_secret';
+
+/**
+ * Оновлює Access Token за допомогою Refresh Token.
+ */
+export const refresh = async (req: Request, res: Response, next: NextFunction) => {
+    // Refresh Token буде передаватися в тілі запиту або cookie.
+    // Для простоти, ми будемо очікувати його в тілі запиту.
+    const { refreshToken: clientRefreshToken } = req.body; 
+
+    if (!clientRefreshToken) {
+        return res.status(401).json({ message: 'Refresh Token is missing.' });
+    }
+
+    try {
+        // 1. Верифікація Refresh Token
+        const decoded = jwt.verify(clientRefreshToken, REFRESH_TOKEN_SECRET) as TokenPayload;
+        const userId = decoded.userId;
+
+        // 2. Пошук користувача та перевірка, чи токен збігається з токеном у базі даних
+        const user = await User.findById(userId).select('+refreshToken');
+
+        if (!user || user.refreshToken !== clientRefreshToken) {
+            // Токен недійсний, відкликаний або користувача не знайдено
+            return res.status(403).json({ message: 'Invalid or expired Refresh Token.' });
+        }
+
+        // 3. Генерування нової пари токенів
+        const payload: TokenPayload = { userId: user._id.toString() };
+        const { accessToken: newAccessToken, refreshToken: newRefreshToken } = generateTokens(payload);
+
+        // 4. Оновлення токенів у базі даних
+        user.accessToken = newAccessToken;
+        user.refreshToken = newRefreshToken;
+        await user.save();
+        
+        // 5. Повернення нової пари токенів клієнту
+        res.status(200).json({
+            message: "Tokens successfully refreshed.",
+            accessToken: newAccessToken,
+            refreshToken: newRefreshToken,
+        });
+
+    } catch (error) {
+        if (error instanceof jwt.JsonWebTokenError) {
+             return res.status(403).json({ message: 'Invalid or expired Refresh Token.' });
+        }
+        next(error);
+    }
+};
