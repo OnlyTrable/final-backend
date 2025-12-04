@@ -3,7 +3,7 @@
 import { Router } from 'express';
 import { authenticate } from '../middlewares/auth.middleware.js'; 
 import validateBody from '../middlewares/validateBody.middleware.js'; 
-import { createPost, getFeed, getImage } from '../controllers/posts.controller.js'; 
+import { createPost, getFeed } from '../controllers/posts.controller.js'; //, getImage
 import { createPostSchema } from '../schemas/post.schemas.js';
 import multer from 'multer'; 
 // import { GridFsStorage } from '@lenne.tech/multer-gridfs-storage'; 

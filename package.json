@@ -36,11 +36,9 @@
     "typescript-eslint": "^8.48.0"
   },
   "dependencies": {
-    "@lenne.tech/multer-gridfs-storage": "^5.0.8",
     "@types/cors": "^2.8.19",
     "@types/mongoose": "^5.11.96",
     "@types/multer": "^2.0.0",
-    "@types/multer-gridfs-storage": "^4.0.8",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
