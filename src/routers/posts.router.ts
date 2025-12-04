@@ -6,7 +6,7 @@ import validateBody from '../middlewares/validateBody.middleware.js';
 import { createPost, getFeed, getImage } from '../controllers/posts.controller.js'; 
 import { createPostSchema } from '../schemas/post.schemas.js';
 import multer from 'multer'; 
-import { GridFsStorage } from '@lenne.tech/multer-gridfs-storage'; 
+// import { GridFsStorage } from '@lenne.tech/multer-gridfs-storage'; 
 import mongoose from 'mongoose'; // <-- ЗАЛИШАЄМО
 
 // 🔥 МИ ПЕРЕНОСИМО ЛОГІКУ ІНІЦІАЛІЗАЦІЇ MULTER УСЕРЕДИНУ ФУНКЦІЇ!
@@ -19,23 +19,23 @@ export const configurePostsRouter = (): Router => {
     
     // 1. КОНФІГУРАЦІЯ GRIDFS/MULTER (Ініціалізується при виклику configurePostsRouter)
     
-    const storage = new GridFsStorage({
-        // ✅ ВИКОРИСТОВУЄМО ТЕ, ЩО ГАРАНТОВАНО БУДЕ ІСНУВАТИ
-        db: mongoose.connection.db as any, 
+    // const storage = new GridFsStorage({
+    //     // ✅ ВИКОРИСТОВУЄМО ТЕ, ЩО ГАРАНТОВАНО БУДЕ ІСНУВАТИ
+    //     db: mongoose.connection.db as any, 
         
-        file: (req, file) => {
-            const filename = `${file.fieldname}-${Date.now()}-${file.originalname}`;
-            return {
-                bucketName: 'postImages', 
-                filename: filename,
-            };
-        },
-    });
+    //     file: (req, file) => {
+    //         const filename = `${file.fieldname}-${Date.now()}-${file.originalname}`;
+    //         return {
+    //             bucketName: 'postImages', 
+    //             filename: filename,
+    //         };
+    //     },
+    // });
 
-    const upload = multer({ 
-        storage: storage as any, 
-        limits: { fileSize: 6 * 1024 * 1024 } 
-    });
+    // const upload = multer({ 
+    //     storage: storage as any, 
+    //     limits: { fileSize: 6 * 1024 * 1024 } 
+    // });
 
     // 2. РЕЄСТРАЦІЯ МАРШРУТІВ
     
@@ -50,16 +50,16 @@ export const configurePostsRouter = (): Router => {
     postsRouter.post(
         '/',
         authenticate, 
-        upload.single('image'), // 🔥 ВИКОРИСТОВУЄМО ІНІЦІАЛІЗОВАНИЙ `upload`
+        // upload.single('image'), // 🔥 ВИКОРИСТОВУЄМО ІНІЦІАЛІЗОВАНИЙ `upload`
         validateBody(createPostSchema), 
         createPost
     );
 
     // GET /api/posts/image/:fileId - Роздача зображень
-    postsRouter.get(
-        '/image/:fileId',
-        getImage 
-    );
+    // postsRouter.get(
+    //     '/image/:fileId',
+    //     getImage 
+    // );
     
     return postsRouter;
 };

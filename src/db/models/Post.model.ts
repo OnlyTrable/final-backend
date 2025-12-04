@@ -7,7 +7,7 @@ export interface PostDocument extends Document {
     author: Types.ObjectId;
     content: string;
     likesCount: number;
-    imageUrl?: Types.ObjectId; // GridFS ID
+    // imageUrl?: Types.ObjectId; // GridFS ID
 }
 
 // 2. Схема Mongoose
