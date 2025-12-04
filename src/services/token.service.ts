@@ -10,11 +10,11 @@ export type TokenPayload = { userId: string };
 export const generateTokens = (payload: TokenPayload) => {
     
     const accessToken = jwt.sign(payload, ACCESS_TOKEN_SECRET, {
-        expiresIn: '1h',
+        expiresIn: '15m',
     });
 
     const refreshToken = jwt.sign(payload, REFRESH_TOKEN_SECRET, {
-        expiresIn: '30d',
+        expiresIn: '1d',
     });
 
     return {

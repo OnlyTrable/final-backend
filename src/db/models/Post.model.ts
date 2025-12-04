@@ -28,10 +28,10 @@ const PostSchema = new Schema<PostDocument>(
             type: Number, 
             default: 0 
         },
-        imageUrl: { // Зберігає ID файлу GridFS
-            type: Schema.Types.ObjectId,
-            required: false,
-        },
+        // imageUrl: { // Зберігає ID файлу GridFS
+        //     type: Schema.Types.ObjectId,
+        //     required: false,
+        // },
     },
     {
         timestamps: true,
