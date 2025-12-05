@@ -17,11 +17,36 @@ import authRouter from "./routers/auth.router.js";
 import userRouter from "./routers/user.router.js";
 import { configurePostsRouter } from "./routers/posts.router.js";
 
+// *** ДОДАЄМО ВИЗНАЧЕННЯ ДОМЕНІВ ДЛЯ КРАЩОГО КОНТРОЛЮ CORS ***
+const allowedOrigins = [
+  "https://only-trable-final-frontend.vercel.app", // Ваш продакшн-домен
+  "http://localhost:5173", // Локальна розробка
+  // Якщо ви деплоїте бекенд на Vercel, також додайте його домен
+];
+
 const startServer = (): void => {
   const app: ExpressApplication = express();
   app.use(cookieParser());
-  const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
-  app.use(cors({ origin: clientUrl, credentials: true }));
+
+  // ✅ ВИКОРИСТОВУЄМО CORS З ФУНКЦІЄЮ ПЕРЕВІРКИ
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        // Дозволяємо, якщо джерело знаходиться у списку allowedOrigins,
+        // АБО якщо `origin` є undefined (що буває для Postman або деяких серверних запитів)
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+          callback(null, true);
+        } else {
+          // Якщо джерело не дозволено
+          callback(new Error("Not allowed by CORS"));
+        }
+      },
+      credentials: true, // Це КРИТИЧНО для відправки куків (refreshToken)
+      methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
+      optionsSuccessStatus: 204,
+    }),
+  );
+
   app.use(express.json({ limit: "10kb" }));
   app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     // Тип 'err' встановлюємо як 'any', тому що помилка парсингу JSON містить нестандартні поля
