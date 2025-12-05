@@ -19,9 +19,9 @@ import { configurePostsRouter } from "./routers/posts.router.js";
 
 // *** ДОДАЄМО ВИЗНАЧЕННЯ ДОМЕНІВ ДЛЯ КРАЩОГО КОНТРОЛЮ CORS ***
 const allowedOrigins = [
-  "https://only-trable-final-frontend.vercel.app", // Ваш продакшн-домен
+  "https://only-trable-final-frontend.vercel.app", // Ваш Frontend на Vercel
+  "https://final-backend-odkb.onrender.com",     // ✅ ДОДАНО: Ваш Backend на Render (без порту)
   "http://localhost:5173", // Локальна розробка
-  // Якщо ви деплоїте бекенд на Vercel, також додайте його домен
 ];
 
 const startServer = (): void => {
@@ -83,3 +83,4 @@ const startServer = (): void => {
 };
 
 export default startServer;
+//# sourceMappingURL=server.d.ts.map
