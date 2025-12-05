@@ -4,23 +4,22 @@ import type {
   Response,
   NextFunction,
   Application as ExpressApplication,
-} from "express"; // Якщо виникне помилка, використовуйте цей синтаксис
+} from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-// import mongoSanitize from 'express-mongo-sanitize';
-
 import notFoundHandler from "./middlewares/notFoundHandler.js";
 import errorHandler from "./middlewares/errorHandler.js";
 
-// 🔥 1. ІМПОРТ РОУТЕРА АУТЕНТИФІКАЦІЇ
+// 🔥 1. ІМПОРТ РОУТЕРІВ
 import authRouter from "./routers/auth.router.js";
 import userRouter from "./routers/user.router.js";
 import { configurePostsRouter } from "./routers/posts.router.js";
+import healthRouter from "./routers/health.routes.js"; 
 
 // *** ДОДАЄМО ВИЗНАЧЕННЯ ДОМЕНІВ ДЛЯ КРАЩОГО КОНТРОЛЮ CORS ***
 const allowedOrigins = [
-  "https://only-trable-final-frontend.vercel.app", // Ваш Frontend на Vercel
-  "https://final-backend-odkb.onrender.com",     // ✅ ДОДАНО: Ваш Backend на Render (без порту)
+  "https://only-trable-final-frontend.vercel.app", // Frontend на Vercel
+  "https://final-backend-odkb.onrender.com",     // ✅ ДОДАНО: Backend на Render (без порту) і запам'ятати, що в Environments НЕ ВКАЗУВАТИ ПОРТ. запит буде йти по замовчуванню 443(HTTPS)
   "http://localhost:5173", // Локальна розробка
 ];
 
@@ -32,12 +31,10 @@ const startServer = (): void => {
   app.use(
     cors({
       origin: (origin, callback) => {
-        // Дозволяємо, якщо джерело знаходиться у списку allowedOrigins,
-        // АБО якщо `origin` є undefined (що буває для Postman або деяких серверних запитів)
-        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+        // Дозволяємо запити без Origin (наприклад, Postman, мобільні додатки або запити з того ж походження)
+        if (!origin || allowedOrigins.includes(origin)) {
           callback(null, true);
         } else {
-          // Якщо джерело не дозволено
           callback(new Error("Not allowed by CORS"));
         }
       },
@@ -66,21 +63,24 @@ const startServer = (): void => {
     next(err);
   });
   app.use(express.static("public"));
+  
   const postsRouter = configurePostsRouter();
-  // 2. ЗАХИСТ ВІД NOSQL ІН'ЄКЦІЙ
-  // app.use(mongoSanitize());
-  app.use("/api/posts", postsRouter);
-  // 🔥 2. ПІДКЛЮЧЕННЯ РОУТЕРІВ
-  // Всі запити, що починаються з /api/auth, будуть оброблені у authRouter
-  app.use("/api/auth", authRouter);
-  app.use("/api/user", userRouter);
-  // Обробники помилок мають бути ПІСЛЯ роутів
+  
+  app.use("/health", healthRouter); 
+  app.use("/api/posts", postsRouter); 
+  app.use("/api/auth", authRouter); 
+  app.use("/api/user", userRouter); 
+
+  // ...
+  
+  // Обробка неіснуючих маршрутів (повинна бути в кінці)
   app.use(notFoundHandler);
   app.use(errorHandler);
 
-  const port: number = Number(process.env.PORT) || 3000;
-  app.listen(port, () => console.log(`Server running on ${port} port`));
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
 };
 
 export default startServer;
-//# sourceMappingURL=server.d.ts.map
