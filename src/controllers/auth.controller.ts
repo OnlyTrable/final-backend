@@ -216,10 +216,12 @@ export const refresh = async (
     });
     // =========================================================================
 
+    const userResponse = user.toObject();
     // 5. Повернення нового Access Token клієнту
     res.status(200).json({
       message: "Tokens successfully refreshed.",
       token: accessToken,
+      user: userResponse, // 👈 Додаємо дані користувача до відповіді
     });
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {

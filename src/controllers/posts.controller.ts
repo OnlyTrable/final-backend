@@ -129,7 +129,3 @@ export const getFeed = async (req: Request, res: Response, next: NextFunction) =
         next(error);
     }
 };
-
-/**
- * ❌ Ця функція більше не потрібна, оскільки Cloudinary віддає зображення.
- */
