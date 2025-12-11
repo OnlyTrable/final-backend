@@ -7,7 +7,8 @@ export interface PostDocument extends Document {
     author: Types.ObjectId;
     content: string;
     likesCount: number;
-    // imageUrl?: Types.ObjectId; // GridFS ID
+    imageUrl?: string; // URL зображення з Cloudinary
+    imagePublicId?: string; // Public ID зображення з Cloudinary для видалення
 }
 
 // 2. Схема Mongoose
@@ -28,10 +29,14 @@ const PostSchema = new Schema<PostDocument>(
             type: Number, 
             default: 0 
         },
-        // imageUrl: { // Зберігає ID файлу GridFS
-        //     type: Schema.Types.ObjectId,
-        //     required: false,
-        // },
+        imageUrl: { // Зберігає URL зображення
+            type: String,
+            required: false, // Робимо поле необов'язковим
+        },
+        imagePublicId: { // Зберігає public_id для керування файлом
+            type: String,
+            required: false,
+        },
     },
     {
         timestamps: true,

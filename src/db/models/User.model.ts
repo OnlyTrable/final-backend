@@ -13,6 +13,8 @@ export interface UserDocument extends Document {
   about: string;
   accessToken: string;
   refreshToken: string;
+  avatarUrl?: string;
+  avatarPublicId?: string;
 }
 
 // 🔥 Схема Mongoose
@@ -50,6 +52,16 @@ const userSchema = new Schema<UserDocument>(
       maxlength: 150, // Обмеження 150 символів
       default: "",
     }, 
+    avatarUrl: {
+      type: String,
+      required: false,
+      default: "https://res.cloudinary.com/demo/image/upload/w_150,h_150,c_thumb,g_face,r_max/sample.jpg",
+    },
+    avatarPublicId: {
+      type: String,
+      required: false,
+      default: "sample",
+    },
     accessToken: {
       type: String,
       default: "",
