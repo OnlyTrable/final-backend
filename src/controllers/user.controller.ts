@@ -121,7 +121,7 @@ export const deleteAvatar = async (
     // Встановлюємо аватар за замовчуванням
     user.avatarUrl =
       "https://res.cloudinary.com/demo/image/upload/w_150,h_150,c_thumb,g_face,r_max/sample.jpg";
-    user.avatarPublicId = undefined; // або null
+    user.avatarPublicId = null;
 
     await user.save();
 

@@ -13,8 +13,8 @@ export interface UserDocument extends Document {
   about: string;
   accessToken: string;
   refreshToken: string;
-  avatarUrl?: string;
-  avatarPublicId?: string;
+  avatarUrl: string | null;
+  avatarPublicId: string | null;
 }
 
 // 🔥 Схема Mongoose
