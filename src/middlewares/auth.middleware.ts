@@ -14,7 +14,20 @@ declare global {
     }
 }
 
-const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || 'your_access_secret';
+// =========================================================================
+// ✅ FIX 1: Видаляємо резервний ключ та вимагаємо наявності ACCESS_TOKEN_SECRET
+// =========================================================================
+const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
+
+// При старті програми обов'язково перевіряємо, чи встановлена змінна.
+// Якщо ні, програма аварійно завершує роботу, запобігаючи використанню 
+// небезпечного або неіснуючого ключа.
+if (!ACCESS_TOKEN_SECRET) {
+    // 🚩 Цей Error буде викинуто при запуску сервера, якщо ключ не знайдено
+    throw new Error('ACCESS_TOKEN_SECRET is not defined in environment variables! Please check your .env file.');
+}
+// =========================================================================
+
 
 /**
  * Мідлвар для автентифікації користувача за Access Token у заголовку Bearer.
@@ -36,7 +49,7 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
 
     try {
         // 3. Верифікація токена
-        // Перетворюємо токен у payload (типізований як TokenPayload)
+        // TypeScript тепер знає, що ACCESS_TOKEN_SECRET є string завдяки перевірці вище.
         const decoded = jwt.verify(accessToken, ACCESS_TOKEN_SECRET) as TokenPayload;
         
         // 4. Перевірка існування користувача та валідності токена в базі
@@ -45,6 +58,7 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
         
         if (!user || user.accessToken !== accessToken) {
              // Це запобігає використанню старих токенів після логауту/зміни пароля
+             // (Або токенів, згенерованих з неправильним ключем до виправлення)
              return res.status(401).json({ message: 'Invalid or revoked token.' });
         }
 
@@ -59,7 +73,6 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
         if (error instanceof jwt.JsonWebTokenError) {
             return res.status(401).json({ message: 'Invalid or expired token.' });
         }
-        // Обробка інших помилок
-        next(error); 
+        next(error);
     }
 };
