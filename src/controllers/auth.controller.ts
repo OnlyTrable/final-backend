@@ -16,26 +16,9 @@ export const register = async (
 ) => {
   try {
     const { email, password, username, fullName, website, about } = req.body;
-
-    // 🚨 Ручна перевірка унікальності
-    const existingUser = await User.findOne({
-      $or: [{ email: email.toLowerCase() }, { username: username }],
-    });
-
-    if (existingUser) {
-      const conflictField =
-        existingUser.email === email.toLowerCase() ? "email" : "username";
-      const error = new Error("Duplicate Key Error");
-      // @ts-ignore
-      error.code = 11000;
-      // @ts-ignore
-      error.keyValue = {
-        [conflictField]: conflictField === "email" ? email : username,
-      };
-
-      return next(error);
-    }
-
+    
+    // Покладаємося на унікальні індекси в схемі для обробки дублікатів.
+    // Глобальний errorHandler перехопить помилку з кодом 11000 і поверне 409.
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
     const newUser = await User.create({

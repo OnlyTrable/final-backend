@@ -1,11 +1,10 @@
 // src/controllers/user.controller.ts
 
 import type { Request, Response, NextFunction } from "express";
-import { v2 as cloudinary, type UploadApiResponse } from "cloudinary";
-import streamifier from "streamifier";
 import User from "../db/models/User.model.js";
 import type { UpdateProfilePayload } from "../schemas/user.schemas.js";
 import HttpError from "../utils/HttpError.js";
+import { uploadImageStream, deleteImage } from "../services/cloudinary.service.js";
 
 
 /**
@@ -61,47 +60,26 @@ export const updateAvatar = async (
       return next(HttpError(404, "User not found"));
     }
 
-    // Допоміжна функція для завантаження буфера на Cloudinary
-    const uploadToCloudinary = (buffer: Buffer): Promise<UploadApiResponse> => {
-      return new Promise((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
-          {
-            folder: "avatars",
-            transformation: [
-              {
-                width: 150,
-                height: 150,
-                crop: "thumb",
-                gravity: "face",
-                radius: "max",
-              },
-            ],
-          },
-          (error, result: UploadApiResponse | undefined) => {
-            if (result) {
-              resolve(result);
-            } else if (error) {
-              reject(error);
-            } else {
-              reject(new Error("Cloudinary upload failed to return a result."));
-            }
-          },
-        );
-        streamifier.createReadStream(buffer).pipe(stream);
-      });
+    // Опції для завантаження аватара
+    const uploadOptions = {
+      folder: "avatars",
+      transformation: [
+        {
+          width: 150,
+          height: 150,
+          crop: "thumb",
+          gravity: "face",
+          radius: "max",
+        },
+      ],
     };
 
     // Завантажуємо новий аватар
-    const uploadResult = await uploadToCloudinary(req.file.buffer);
+    const uploadResult = await uploadImageStream(req.file.buffer, uploadOptions);
 
     // Видаляємо старий аватар з Cloudinary, якщо він існує і не є дефолтним.
-    // Дефолтний аватар "sample.jpg" не має public_id в нашій базі.
-    if (
-      user.avatarPublicId &&
-      user.avatarUrl !==
-        "https://res.cloudinary.com/demo/image/upload/w_150,h_150,c_thumb,g_face,r_max/sample.jpg"
-    ) {
-      await cloudinary.uploader.destroy(user.avatarPublicId);
+    if (user.avatarPublicId) {
+      await deleteImage(user.avatarPublicId);
     }
 
     // Оновлюємо дані користувача
@@ -116,6 +94,47 @@ export const updateAvatar = async (
     });
   } catch (error) {
     next(error);
+  }
+};
+
+/**
+ * Видаляє аватар користувача та встановлює зображення за замовчуванням.
+ */
+export const deleteAvatar = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  const userId = req.userId;
+
+  try {
+    const user = await User.findById(userId);
+    if (!user) {
+      return next(HttpError(404, "User not found"));
+    }
+
+    // Видаляємо старий аватар з Cloudinary, якщо він існує.
+    if (user.avatarPublicId) {
+      await deleteImage(user.avatarPublicId);
+    }
+
+    // Встановлюємо аватар за замовчуванням
+    user.avatarUrl =
+      "https://res.cloudinary.com/demo/image/upload/w_150,h_150,c_thumb,g_face,r_max/sample.jpg";
+    user.avatarPublicId = undefined; // або null
+
+    await user.save();
+
+    res.status(200).json({
+      status: "success",
+      message: "Avatar deleted and reset to default.",
+      user: user.toObject(),
+    });
+  } catch (error) {
+    // Якщо виникає помилка при видаленні з Cloudinary, ми все одно можемо
+    // спробувати оновити користувача, але краще залогувати помилку.
+    console.error("Error deleting avatar from Cloudinary:", error);
+    next(HttpError(500, "Could not delete avatar."));
   }
 };
 
