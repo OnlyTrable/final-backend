@@ -74,15 +74,15 @@ const userSchema = new Schema<UserDocument>(
   {
     versionKey: false,
     timestamps: true,
-    // 💡 ВИПРАВЛЕННЯ: Тепер використовуємо функцію з зовнішнього файлу
-    toJSON: {
-      transform: transformUser, // Використовуємо імпортовану функцію
-    },
-    toObject: {
-      transform: transformUser, // Застосовуємо трансформацію також для toObject
-    },
+    // 💡 ВИПРАВЛЕННЯ: Тепер використовуємо функцію transformUser
+    toJSON: { virtuals: true, transform: transformUser }, 
+    toObject: { virtuals: true, transform: transformUser },
   },
 );
+
+// ✅ Додавання індексу для прискорення пошуку
+userSchema.index({ email: 1 });
+userSchema.index({ username: 1 });
 
 // 🔥 Створення та експорт Mongoose-моделі
 const User = model<UserDocument>("User", userSchema);
