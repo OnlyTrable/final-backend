@@ -80,10 +80,6 @@ const userSchema = new Schema<UserDocument>(
   },
 );
 
-// ✅ Додавання індексу для прискорення пошуку
-userSchema.index({ email: 1 });
-userSchema.index({ username: 1 });
-
 // 🔥 Створення та експорт Mongoose-моделі
 const User = model<UserDocument>("User", userSchema);
 export default User;
