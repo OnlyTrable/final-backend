@@ -11,6 +11,11 @@ export interface UserDocument extends Document {
   fullName: string;
   website: string;
   about: string;
+  role: string;
+  followersCount: number;
+  followingCount: number;
+  postsCount: number;
+  commentsCount: number;
   accessToken: string;
   refreshToken: string;
   avatarUrl: string | null;
@@ -51,16 +56,39 @@ const userSchema = new Schema<UserDocument>(
       trim: true,
       maxlength: 150, // Обмеження 150 символів
       default: "",
-    }, 
+    },
     avatarUrl: {
       type: String,
       required: false,
-      default: "https://res.cloudinary.com/demo/image/upload/w_150,h_150,c_thumb,g_face,r_max/sample.jpg",
+      default:
+        "https://res.cloudinary.com/demo/image/upload/w_150,h_150,c_thumb,g_face,r_max/sample.jpg",
     },
     avatarPublicId: {
       type: String,
       required: false,
       default: "sample",
+    },
+    role: {
+      type: String,
+      enum: ["User", "Admin", "Moderator"], // Можливі ролі
+      default: "User",
+      required: true,
+    },
+    followersCount: {
+      type: Number,
+      default: 0,
+    },
+    followingCount: {
+      type: Number,
+      default: 0,
+    },
+    postsCount: {
+      type: Number,
+      default: 0,
+    },
+    commentsCount: {
+      type: Number,
+      default: 0,
     },
     accessToken: {
       type: String,
@@ -75,7 +103,7 @@ const userSchema = new Schema<UserDocument>(
     versionKey: false,
     timestamps: true,
     // 💡 ВИПРАВЛЕННЯ: Тепер використовуємо функцію transformUser
-    toJSON: { virtuals: true, transform: transformUser }, 
+    toJSON: { virtuals: true, transform: transformUser },
     toObject: { virtuals: true, transform: transformUser },
   },
 );

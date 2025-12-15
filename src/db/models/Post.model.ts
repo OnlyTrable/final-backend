@@ -7,6 +7,7 @@ export interface PostDocument extends Document {
     author: Types.ObjectId;
     content: string;
     likesCount: number;
+    commentsCount: number;
     imageUrl?: string; // URL зображення з Cloudinary
     imagePublicId?: string; // Public ID зображення з Cloudinary для видалення
 }
@@ -27,7 +28,11 @@ const PostSchema = new Schema<PostDocument>(
         },
         likesCount: { 
             type: Number, 
-            default: 0 
+            default: 0, 
+        },
+        commentsCount: { 
+            type: Number, 
+            default: 0,
         },
         imageUrl: { // Зберігає URL зображення
             type: String,

@@ -15,7 +15,9 @@ import authRouter from "./routers/auth.router.js";
 import userRouter from "./routers/user.router.js";
 import { configurePostsRouter } from "./routers/posts.router.js";
 import healthRouter from "./routers/health.routes.js"; 
-
+import followRouter from "./routers/follow.router.js"; // 🔥 ДОДАНО
+import messagesRouter from "./routers/messages.router.js"; // 🔥 ДОДАНО
+import notificationRouter from "./routers/notification.router.js"; // 🔥 ДОДАНО
 // *** ДОДАЄМО ВИЗНАЧЕННЯ ДОМЕНІВ ДЛЯ КРАЩОГО КОНТРОЛЮ CORS ***
 const allowedOrigins = [
   "https://only-trable-final-frontend.vercel.app", // Frontend на Vercel
@@ -70,7 +72,9 @@ const startServer = (): void => {
   app.use("/api/posts", postsRouter); 
   app.use("/api/auth", authRouter); 
   app.use("/api/user", userRouter); 
-
+  app.use("/api/follow", followRouter); 
+  app.use("/api/messages", messagesRouter);
+  app.use("/api/notifications", notificationRouter);
   // ...
   
   // Обробка неіснуючих маршрутів (повинна бути в кінці)
