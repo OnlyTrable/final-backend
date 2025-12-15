@@ -1,4 +1,4 @@
-// src/routers/posts.router.ts (ОНОВЛЕНО)
+// src/routers/posts.router.ts
 
 import { Router } from 'express';
 import type { RequestHandler } from 'express';
@@ -9,32 +9,44 @@ import { toggleLike } from '../controllers/likes.controller.js';
 import { createPostSchema } from '../schemas/post.schemas.js';
 import multer from 'multer'; 
 import mongoose from 'mongoose';
+// 🔥 ІМПОРТИ ДЛЯ КОМЕНТАРІВ
+import { createComment } from '../controllers/comments.controller.js';
+import { createCommentSchema } from '../schemas/comment.schemas.js';
+import { multerUpload, cloudinaryUpload } from '../middlewares/multer.middleware.js'; 
+
 
 export const postsRouter: Router = Router();
 
-// ФУНКЦІЯ-КОНФІГУРАТОР, ЯКА ДОДАЄ МІДЛВАР MULTER ПІСЛЯ ТОГО,
-// ЯК MONGODB ГАРАНТОВАНО ПІДКЛЮЧЕНИЙ
 export const configurePostsRouter = (): Router => {
-
     postsRouter.get(
         '/',
         authenticate, 
         getFeed
     );
 
-    // POST /api/posts - Створити новий пост (з GridFS)
     postsRouter.post(
         '/',
         authenticate, 
-        // upload.single('image'), // 🔥 ВИКОРИСТОВУЄМО ІНІЦІАЛІЗОВАНИЙ `upload`
+        // Припускаємо, що роут для постів використовує окремий Multer, або цей
+        // upload.single('image'), 
         validateBody(createPostSchema), 
         createPost
     );
     
     postsRouter.post(
-        '/:postId/like', // Використовуємо ':postId' як параметр
+        '/:postId/like', 
         authenticate, 
-        (toggleLike as unknown) as RequestHandler// Контролер
+        (toggleLike as unknown) as RequestHandler
+    );
+
+    // 🔥 НОВИЙ РОУТ ДЛЯ КОМЕНТАРІВ ІЗ ЗОБРАЖЕННЯМИ
+    postsRouter.post(
+        '/:postId/comments', 
+        authenticate, 
+        multerUpload.single('image'), 
+        cloudinaryUpload, 
+        validateBody(createCommentSchema), 
+        (createComment as unknown) as RequestHandler
     );
 
     return postsRouter;

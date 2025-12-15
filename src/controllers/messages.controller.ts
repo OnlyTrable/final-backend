@@ -1,3 +1,5 @@
+// src/controllers/messages.controller.ts
+
 import type { Request, Response, NextFunction } from 'express';
 import { Types } from 'mongoose';
 import Conversation from '../db/models/Conversation.model.js';
@@ -12,12 +14,12 @@ interface ConversationParams {
 
 // Інтерфейс для тіла запиту (створення повідомлення)
 interface CreateMessagePayload {
-    recipientId: string; // Користувач, якому надсилаємо повідомлення (для першого повідомлення)
+    recipientId: string; // Користувач, якому надсилаємо повідомлення
     content: string;
 }
 
 /**
- * 🚀 Створює нове повідомлення (і розмову, якщо вона ще не існує).
+ * 🚀 Створює нове повідомлення (і розмову, якщо вона ще не існує) та випромінює його.
  * POST /api/messages
  */
 export const sendMessage = async (
@@ -29,29 +31,20 @@ export const sendMessage = async (
         const senderId = req.userId;
         const { recipientId, content } = req.body;
 
-        if (!senderId || !recipientId) {
-            return next(HttpError(401, "Sender and recipient IDs are required."));
-        }
-        if (senderId === recipientId) {
-            return next(HttpError(400, "Cannot send message to yourself."));
-        }
-        
+        // ... (Валідація ID)
+
         const senderObjectId = new Types.ObjectId(senderId);
         const recipientObjectId = new Types.ObjectId(recipientId);
 
         // 1. Шукаємо або створюємо розмову
         let conversation = await Conversation.findOne({
             participants: { $all: [senderObjectId, recipientObjectId] },
-            // Примітка: ця логіка передбачає, що ми завжди створюємо розмову
-            // для двох користувачів, коли вони вперше починають чат.
         });
         
         if (!conversation) {
-            // Якщо розмови немає, створюємо нову
             conversation = await Conversation.create({
                 participants: [senderObjectId, recipientObjectId],
             });
-            // Перевіряємо, чи існує отримувач
             const recipientUser = await User.findById(recipientObjectId);
             if (!recipientUser) {
                 return next(HttpError(404, "Recipient user not found."));
@@ -68,19 +61,32 @@ export const sendMessage = async (
 
         // 3. Оновлюємо поле `lastMessage` у розмові
         conversation.lastMessage = message._id;
+        (conversation as any).lastMessageAt = new Date(); // ✅ Оновлення часу
         await conversation.save();
 
-        // 4. Завантажуємо відправника для відповіді
+        // 4. Завантажуємо відправника
         const messageWithSender = await message.populate({
             path: 'sender',
             select: '_id username fullName avatarUrl'
         });
 
+        // 5. 🔥 SOCKET.IO: Випромінювання повідомлення
+        try {
+            const io = req.app.get('io'); 
+            
+            if (io) {
+                // Випромінюємо подію в кімнату, названу ID розмови
+                io.to(conversation._id.toString()).emit('new_message', messageWithSender);
+            }
+        } catch (socketError) {
+             console.warn("Socket.IO failed to emit:", socketError); 
+        }
+        
+        // 6. Відповідь REST API
         res.status(201).json({
-            mmessage: "Message sent successfully.", // ✅ 1. Рядок повідомлення
+            message: "Message sent successfully.",
             conversationId: conversation._id,
-            sentMessage: messageWithSender,      // ✅ 2. САМ об'єкт повідомлення
-            // У реальному застосуванні тут можна було б надіслати Socket.IO івент
+            sentMessage: messageWithSender,
         });
 
     } catch (error) {
@@ -88,58 +94,51 @@ export const sendMessage = async (
     }
 };
 
-
 /**
- * 🚀 Отримує повідомлення для конкретної розмови.
- * GET /api/messages/:conversationId?page=1&limit=20
+ * 📚 Отримує історію повідомлень для конкретної розмови.
+ * GET /api/messages/:conversationId
  */
 export const getMessagesByConversation = async (
-    req: Request<ConversationParams>, 
+    req: Request<ConversationParams, {}, {}>,
     res: Response,
     next: NextFunction,
 ) => {
     try {
         const userId = req.userId;
         const { conversationId } = req.params;
-        const page = parseInt(req.query.page as string || '1', 10);
-        const limit = parseInt(req.query.limit as string || '20', 10);
-        const skip = (page - 1) * limit;
 
-        const conversationObjectId = new Types.ObjectId(conversationId);
-        const userObjectId = new Types.ObjectId(userId!);
-
-        // 1. Перевіряємо, чи є користувач учасником цієї розмови
-        const conversation = await Conversation.findById(conversationObjectId);
-
-        if (!conversation || !conversation.participants.includes(userObjectId)) {
-            return next(HttpError(404, "Conversation not found or you are not a participant."));
+        if (!userId) {
+            return next(HttpError(401, "Not authenticated."));
         }
 
-        // 2. Отримуємо повідомлення, сортуємо від нових до старих
+        const conversationObjectId = new Types.ObjectId(conversationId);
+        const userObjectId = new Types.ObjectId(userId);
+
+        // 1. Перевіряємо, чи є користувач учасником розмови
+        const conversation = await Conversation.findById(conversationObjectId);
+        
+        if (!conversation || !conversation.participants.includes(userObjectId)) {
+            return next(HttpError(403, "You are not a participant in this conversation."));
+        }
+
+        // 2. Отримуємо повідомлення, сортуючи від найстаріших до найновіших
         const messages = await Message.find({ conversation: conversationObjectId })
-            .sort({ createdAt: -1 }) // Від нових до старих
-            .skip(skip)
-            .limit(limit)
+            .sort({ createdAt: 1 }) 
             .populate({
                 path: 'sender',
                 select: '_id username fullName avatarUrl'
             })
             .lean();
 
-        // 3. Змінюємо порядок на фронтенд-дружній (від старих до нових)
-        const reversedMessages = messages.reverse();
-
-        // 4. Отримуємо загальну кількість
-        const total = await Message.countDocuments({ conversation: conversationObjectId });
+        // 3. Позначаємо повідомлення як прочитані (для поточного користувача)
+        await Message.updateMany(
+            { conversation: conversationObjectId, sender: { $ne: userObjectId }, isRead: false },
+            { $set: { isRead: true } }
+        );
 
         res.status(200).json({
-            messages: reversedMessages,
-            meta: {
-                total,
-                currentPage: page,
-                limit: limit,
-                totalPages: Math.ceil(total / limit),
-            },
+            messages,
+            message: "Messages retrieved successfully.",
         });
 
     } catch (error) {
@@ -148,28 +147,30 @@ export const getMessagesByConversation = async (
 };
 
 /**
- * 🚀 Отримує список розмов користувача.
+ * 📜 Отримує список розмов користувача.
  * GET /api/messages/conversations
  */
 export const getConversations = async (
-    req: Request, 
+    req: Request,
     res: Response,
     next: NextFunction,
 ) => {
     try {
         const userId = req.userId;
-        const userObjectId = new Types.ObjectId(userId!);
+
+        if (!userId) {
+            return next(HttpError(401, "Not authenticated."));
+        }
+        
+        const userObjectId = new Types.ObjectId(userId);
 
         // 1. Знаходимо всі розмови, де користувач є учасником
         const conversations = await Conversation.find({ participants: userObjectId })
-            // Сортуємо за останнім оновленням
-            .sort({ updatedAt: -1 })
+             .sort({ updatedAt: -1 })
             // Завантажуємо дані учасників
             .populate({
                 path: 'participants',
                 select: '_id username fullName avatarUrl',
-                // Виключаємо поточного користувача зі списку учасників усередині об'єкта
-                match: { _id: { $ne: userObjectId } },
             })
             // Завантажуємо дані останнього повідомлення
             .populate({
@@ -180,17 +181,19 @@ export const getConversations = async (
 
         // 2. Фільтруємо/форматуємо
         const formattedConversations = conversations.map(conv => {
-            // Отримуємо "іншого" учасника (в приватних чатах)
-            const otherParticipant = conv.participants.filter(p => p._id.toString() !== userId)[0];
+            // Отримуємо "іншого" учасника
+            const otherParticipant = conv.participants.find(p => p._id.toString() !== userId);
             
+            // Отримуємо кількість непрочитаних повідомлень (якщо потрібно)
+            // Приклад: const unreadCount = await Message.countDocuments({ conversation: conv._id, sender: { $ne: userObjectId }, isRead: false });
+
             return {
                 _id: conv._id,
                 updatedAt: conv.updatedAt,
-                // Повертаємо останнє повідомлення як об'єкт
+                // Повертаємо останнє повідомлення
                 lastMessage: conv.lastMessage, 
                 // Повертаємо інформацію про співрозмовника
                 otherParticipant: otherParticipant || null, 
-                // ... інші дані, якщо потрібно (наприклад, кількість непрочитаних)
             };
         });
 

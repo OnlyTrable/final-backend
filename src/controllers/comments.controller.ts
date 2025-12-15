@@ -1,4 +1,4 @@
-// src/controllers/comments.controller.ts (ОНОВЛЕНО createComment)
+// src/controllers/comments.controller.ts
 
 import type { Request, Response, NextFunction } from "express";
 import Post from "../db/models/Post.model.js";
@@ -25,11 +25,11 @@ export const createComment = async (
     const userId = req.userId;
     const { postId } = req.params;
     const { content } = req.body;
-    // Примітка: imageUrl/imagePublicId очікується, що буде додано Multer/Cloudinary
-    // У цьому спрощеному прикладі ми припускаємо, що вони будуть додані в req.file
-    // і оброблені перед викликом цього контролера.
-    // Якщо ви не використовуєте Multer, цей контролер не зможе приймати зображення.
-    // Для чистоти коду, я залишаю лише текстовий контент.
+    
+    // 🔥 Зчитування даних зображення з req.file (після CloudinaryUpload)
+    const file = req.file as any;
+    const imageUrl: string | undefined = file?.path; 
+    const imagePublicId: string | undefined = file?.filename;
 
     if (!userId) {
       return next(HttpError(401, "Not authenticated."));
@@ -38,16 +38,27 @@ export const createComment = async (
     const postObjectId = new Types.ObjectId(postId);
     const userObjectId = new Types.ObjectId(userId);
 
-    // Створюємо об'єкт для нового коментаря, щоб уникнути передачі `undefined`
+    // Створюємо об'єкт для нового коментаря
     const commentData: {
       post: Types.ObjectId;
       author: Types.ObjectId;
       content?: string;
+      imageUrl?: string; // ✅ ДОДАНО
+      imagePublicId?: string; // ✅ ДОДАНО
     } = {
       post: postObjectId,
       author: userObjectId,
     };
+    
+    // Ручна перевірка, щоб уникнути скарг ESLint/TypeScript
     if (content) commentData.content = content;
+    if (imageUrl) commentData.imageUrl = imageUrl;
+    if (imagePublicId) commentData.imagePublicId = imagePublicId;
+    
+    // ⚠️ Mongoose хук 'validate' вже повинен це робити, але додаємо додатковий захист
+    if (!commentData.content && !commentData.imageUrl) {
+        return next(HttpError(400, "A comment must contain either text content or an image."));
+    }
 
     // 1. Створення нового коментаря
     const newComment = await Comment.create(commentData);
@@ -64,8 +75,7 @@ export const createComment = async (
       return next(HttpError(404, "Post not found."));
     }
 
-    // 3. 🔥 СТВОРЕННЯ СПОВІЩЕННЯ:
-    // Якщо коментатор не є автором поста
+    // 3. СТВОРЕННЯ СПОВІЩЕННЯ:
     if (updatedPost.author.toString() !== userId) {
       await Notification.create({
         recipient: updatedPost.author,
@@ -91,5 +101,4 @@ export const createComment = async (
     next(error);
   }
 };
-
-// ... (Додайте тут функції getCommentsByPostId, deleteComment, якщо вони у вас є) ...
+// ... (інші функції)

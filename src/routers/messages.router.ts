@@ -1,4 +1,4 @@
-// src/routers/messages.router.ts (ПОВНИЙ КОД)
+// src/routers/messages.router.ts
 
 import { Router } from 'express';
 import type { RequestHandler } from 'express'; 
@@ -15,10 +15,6 @@ import { createMessageSchema } from '../schemas/message.schemas.js';
 
 const messagesRouter: Router = Router();
 
-// =======================================================
-// РОУТЕР ПОВІДОМЛЕНЬ (MESSAGES)
-// =======================================================
-
 // 1. GET /api/messages/conversations - Отримати список розмов користувача
 messagesRouter.get(
     '/conversations',
@@ -26,11 +22,10 @@ messagesRouter.get(
     (getConversations as unknown) as RequestHandler
 );
 
-// 2. POST /api/messages - Надіслати нове повідомлення (і створити розмову, якщо потрібно)
+// 2. POST /api/messages - Надіслати нове повідомлення (і створити розмову)
 messagesRouter.post(
     '/',
     authenticate,
-    // Використовуємо схему валідації
     validateBody(createMessageSchema), 
     (sendMessage as unknown) as RequestHandler
 );

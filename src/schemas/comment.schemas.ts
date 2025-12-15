@@ -10,6 +10,8 @@ export const createCommentSchema = z.object({
     content: z
         .string()
         .max(COMMENT_MAX_LENGTH, `Comment content cannot exceed ${COMMENT_MAX_LENGTH} characters.`)
+        .trim() // Видаляє пробіли на початку/в кінці
+        .transform(value => value === '' ? undefined : value) // Перетворює "" на undefined
         .optional(), // ✅ Зроблено опціональним!
 });
 
