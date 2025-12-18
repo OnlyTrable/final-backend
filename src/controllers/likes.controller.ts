@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import Post from '../db/models/Post.model.js';
 import Like from '../db/models/Like.model.js';
 import Notification from '../db/models/Notification.model.js';
-import { Types } from 'mongoose';
+import { Types, isValidObjectId } from 'mongoose';
 import HttpError from '../utils/HttpError.js';
 
 // Інтерфейс для параметрів маршруту
@@ -25,6 +25,11 @@ export const toggleLike = async (
 
         if (!userId) {
             return next(HttpError(401, "Not authenticated."));
+        }
+
+        // Валідація ObjectId
+        if (!isValidObjectId(postId)) {
+            return next(HttpError(400, "Invalid Post ID format."));
         }
 
         // 1. Перевірка існування поста
@@ -50,9 +55,8 @@ export const toggleLike = async (
             // ===================================
             await existingLike.deleteOne();
             
-            // Зменшуємо лічильник лайків у пості
-            post.likesCount = Math.max(0, post.likesCount - 1); // Запобігаємо від'ємним значенням
-            await post.save();
+            // Атомарно зменшуємо лічильник лайків
+            await Post.updateOne({ _id: postObjectId }, { $inc: { likesCount: -1 } });
             
             message = "Post successfully unliked.";
             status = 200; // 200 OK для успішного видалення
@@ -66,9 +70,8 @@ export const toggleLike = async (
                 user: new Types.ObjectId(userId),
             });
 
-            // Збільшуємо лічильник лайків у пості
-            post.likesCount += 1;
-            await post.save();
+            // Атомарно збільшуємо лічильник лайків
+            await Post.updateOne({ _id: postObjectId }, { $inc: { likesCount: 1 } });
             
             message = "Post successfully liked.";
             status = 201; // 201 Created для створення
@@ -85,10 +88,14 @@ export const toggleLike = async (
             }
         }
 
+        // Отримуємо оновлений лічильник лайків для відповіді
+        const updatedPost = await Post.findById(postObjectId, 'likesCount').lean();
+
         // 3. Повертаємо оновлений лічильник (або весь пост)
         res.status(status).json({
             message: message,
-            likesCount: post.likesCount,
+            // Використовуємо ?? 0 на випадок, якщо пост був видалений в іншому процесі
+            likesCount: updatedPost?.likesCount ?? 0,
             isLiked: !existingLike, // Чи є пост зараз лайкнутим
         });
         

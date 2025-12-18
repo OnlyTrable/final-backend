@@ -3,7 +3,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import Post from '../db/models/Post.model.js';
 import type { CreatePostPayload } from '../schemas/post.schemas.js';
-import { v2 as cloudinary } from 'cloudinary';
+import { v2 as cloudinary, type UploadApiResponse } from 'cloudinary';
 import { Types } from 'mongoose'; // 👈 Імпортуємо Types
 
 /**
@@ -44,17 +44,22 @@ export const createPost = async (req: Request<{}, {}, CreatePostPayload>, res: R
 
         // 2. Якщо є файл, завантажуємо його в Cloudinary
         if (req.file) {
+            const file = req.file; // Зберігаємо файл у константу, щоб TypeScript не губив тип
             // Завантажуємо буфер напряму в Cloudinary
-            const result = await new Promise((resolve, reject) => {
+            const result = await new Promise<UploadApiResponse | undefined>((resolve, reject) => {
                 const uploadStream = cloudinary.uploader.upload_stream({
                     folder: 'posts', // Опціонально: папка в Cloudinary
                 }, (error, result) => {
                     if (error) return reject(error);
                     resolve(result);
-                }).end(req.file.buffer);
+                }).end(file.buffer); // Використовуємо константу
             });
-            postData.imageUrl = (result as any).secure_url;
-            postData.imagePublicId = (result as any).public_id;
+
+            // Присвоюємо URL та ID, тільки якщо вони існують, щоб задовольнити `exactOptionalPropertyTypes`
+            if (result) {
+                postData.imageUrl = result.secure_url;
+                postData.imagePublicId = result.public_id;
+            }
         }
 
         console.log('3. Data before saving to DB:', postData);
