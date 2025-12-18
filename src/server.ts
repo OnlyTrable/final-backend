@@ -56,7 +56,7 @@ const startServer = (): void => {
     }),
   );
 
-  app.use(express.json({ limit: "10kb" }));
+  app.use(express.json({ limit: "10mb" })); // ✅ Збільшуємо ліміт для JSON-запитів
   app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     if (
       err instanceof SyntaxError &&
