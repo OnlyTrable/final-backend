@@ -177,26 +177,25 @@ export const refresh = async (
         .json({ message: "Invalid or expired Refresh Token." });
     }
 
-    // 3. Генерування нової пари токенів
+    // 3. Генерування ТІЛЬКИ нового Access Token
     const payload: TokenPayload = { userId: user._id.toString() };
-    // 👇 ВИПРАВЛЕНО: Використовуємо 'accessToken' та 'refreshToken'
-    const { accessToken, refreshToken } = generateTokens(payload); 
+    const { accessToken } = generateTokens(payload); // Не генеруємо новий refreshToken
 
-    // 4. Оновлення токенів у базі даних
+    // 4. Оновлення ТІЛЬКИ accessToken у базі даних
     user.accessToken = accessToken;
-    user.refreshToken = refreshToken;
     await user.save();
 
     // =========================================================================
     // ✅ FIX: Умовне встановлення sameSite та secure для dev/prod
     const isProduction = process.env.NODE_ENV === "production";
 
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: isProduction, // Встановлюємо secure: true ЛИШЕ в продакшені (на HTTPS)
-      sameSite: isProduction ? "none" : undefined, // SameSite: None вимагає secure: true. На HTTP localhost sameSite: undefined
-      maxAge: 24 * 60 * 60 * 1000,
-    });
+    // Оскільки refreshToken не змінився, нам не потрібно оновлювати cookie.
+    // res.cookie("refreshToken", refreshToken, {
+    //   httpOnly: true,
+    //   secure: isProduction,
+    //   sameSite: isProduction ? "none" : undefined,
+    //   maxAge: 24 * 60 * 60 * 1000,
+    // });
     // =========================================================================
 
     const userResponse = user.toObject();

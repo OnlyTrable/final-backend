@@ -5,9 +5,9 @@ import { Schema, model, Document, Types } from 'mongoose';
 // 1. Інтерфейс для документа Post
 export interface PostDocument extends Document {
     author: Types.ObjectId;
-    content: string;
-    likesCount: number;
-    commentsCount: number;
+    content?: string; // Може бути відсутнім, якщо є imageUrl
+    likesCount?: number; // Має значення за замовчуванням
+    commentsCount?: number; // Має значення за замовчуванням
     imageUrl?: string; // URL зображення з Cloudinary
     imagePublicId?: string; // Public ID зображення з Cloudinary для видалення
 }
@@ -22,8 +22,13 @@ const PostSchema = new Schema<PostDocument>(
         },
         content: { 
             type: String, 
-            required: true, 
+            // Поле не є строго обов'язковим, оскільки може бути пост лише з зображенням.
+            // Але якщо воно є, то не може бути порожнім після trim.
+            required: function(this: PostDocument) {
+                return !this.imageUrl; // Контент обов'язковий, якщо НЕМАЄ зображення
+            },
             trim: true,
+            // minlength: [0, '...'] є недійсним. Прибираємо його, оскільки логіка required вже достатня.
             maxlength: 500,
         },
         likesCount: { 

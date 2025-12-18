@@ -5,15 +5,6 @@ import Post from '../db/models/Post.model.js';
 import type { CreatePostPayload } from '../schemas/post.schemas.js';
 import { v2 as cloudinary } from 'cloudinary';
 import { Types } from 'mongoose'; // 👈 Імпортуємо Types
-import DatauriParser from 'datauri/parser.js';
-import path from 'path';
-
-// Створюємо екземпляр парсера
-const parser = new DatauriParser();
-
-// Функція-хелпер для перетворення буфера в Data URI
-const bufferToDataURI = (fileFormat: string, buffer: Buffer) =>
-    parser.format(fileFormat, buffer).content;
 
 /**
  * Створює новий пост для аутентифікованого користувача.
@@ -22,40 +13,51 @@ const bufferToDataURI = (fileFormat: string, buffer: Buffer) =>
 export const createPost = async (req: Request<{}, {}, CreatePostPayload>, res: Response, next: NextFunction) => {
     try {
         const authorId = req.userId;
+        console.log('--- DEBUG: Inside createPost Controller ---');
+        console.log('1. Initial req.body:', req.body);
         const { content } = req.body;
+        console.log('2. Destructured content:', content);
 
         if (!authorId) {
             return res.status(401).json({ message: "Not authenticated." });
         }
 
+        // Валідація: не можна створити абсолютно порожній пост
+        if (!req.file && (!content || !content.trim())) {
+            return res.status(400).json({ message: "Post cannot be empty. Please provide content or an image." });
+        }
+
         // 1. Створюємо об'єкт для нового поста
         const postData: {
             author: Types.ObjectId;
-            content: string;
+            content?: string;
             imageUrl?: string;
             imagePublicId?: string;
         } = {
             author: new Types.ObjectId(authorId), // ✨ Виправляємо тип
-            content: content,
         };
+
+        // Додаємо контент, якщо він є
+        if (content) {
+            postData.content = content;
+        }
 
         // 2. Якщо є файл, завантажуємо його в Cloudinary
         if (req.file) {
-            // Перетворюємо буфер в Data URI
-            const fileExtension = path.extname(req.file.originalname).toString();
-            const fileContent = bufferToDataURI(fileExtension, req.file.buffer);
-
-            if (fileContent) {
-                // Завантажуємо в Cloudinary
-                const result = await cloudinary.uploader.upload(fileContent, {
+            // Завантажуємо буфер напряму в Cloudinary
+            const result = await new Promise((resolve, reject) => {
+                const uploadStream = cloudinary.uploader.upload_stream({
                     folder: 'posts', // Опціонально: папка в Cloudinary
-                });
-
-                // Додаємо дані з Cloudinary до об'єкта поста
-                postData.imageUrl = result.secure_url;
-                postData.imagePublicId = result.public_id;
-            }
+                }, (error, result) => {
+                    if (error) return reject(error);
+                    resolve(result);
+                }).end(req.file.buffer);
+            });
+            postData.imageUrl = (result as any).secure_url;
+            postData.imagePublicId = (result as any).public_id;
         }
+
+        console.log('3. Data before saving to DB:', postData);
 
         // 3. Створюємо пост в базі даних
         const newPost = await Post.create(postData);

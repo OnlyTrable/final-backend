@@ -1,7 +1,7 @@
 // src/routers/posts.router.ts
 
 import { Router } from 'express';
-import type { RequestHandler } from 'express';
+import type { RequestHandler, Request, Response, NextFunction } from 'express';
 import { authenticate } from '../middlewares/auth.middleware.js'; 
 import validateBody from '../middlewares/validateBody.middleware.js'; 
 import { createPost, getFeed } from '../controllers/posts.controller.js';
@@ -17,6 +17,14 @@ import { multerUpload, cloudinaryUpload } from '../middlewares/multer.middleware
 
 export const postsRouter: Router = Router();
 
+// // Створимо простий middleware для логування (можна видалити або закоментувати)
+// const logRequestData: RequestHandler = (req: Request, res: Response, next: NextFunction) => {
+//     console.log('--- DEBUG: Request Data ---');
+//     console.log('req.body:', req.body);
+//     console.log('req.file:', req.file ? { fieldname: req.file.fieldname, originalname: req.file.originalname, size: req.file.size } : 'No file');
+//     next();
+// };
+
 export const configurePostsRouter = (): Router => {
     postsRouter.get(
         '/',
@@ -26,10 +34,12 @@ export const configurePostsRouter = (): Router => {
 
     postsRouter.post(
         '/',
-        authenticate, 
-        // Припускаємо, що роут для постів використовує окремий Multer, або цей
-        // upload.single('image'), 
-        validateBody(createPostSchema), 
+        authenticate, // 1. Спочатку перевіряємо, чи авторизований користувач
+        // 2. Тепер обробляємо файл
+        multerUpload.single('image'), 
+        cloudinaryUpload, 
+        // logRequestData, // Прибираємо логер
+        // validateBody(createPostSchema), // ❌ ВИДАЛЕНО: Цей middleware конфліктує з multer для multipart/form-data.
         createPost
     );
     
