@@ -5,6 +5,7 @@ import Post from '../db/models/Post.model.js';
 import type { CreatePostPayload } from '../schemas/post.schemas.js';
 import { v2 as cloudinary, type UploadApiResponse } from 'cloudinary';
 import { Types } from 'mongoose'; // 👈 Імпортуємо Types
+import { uploadToCloudinary } from '../utils/cloudinaryUploader.js';
 
 /**
  * Створює новий пост для аутентифікованого користувача.
@@ -13,10 +14,11 @@ import { Types } from 'mongoose'; // 👈 Імпортуємо Types
 export const createPost = async (req: Request<{}, {}, CreatePostPayload>, res: Response, next: NextFunction) => {
     try {
         const authorId = req.userId;
-        console.log('--- DEBUG: Inside createPost Controller ---');
-        console.log('1. Initial req.body:', req.body);
+        // console.log('\n--- 🚀 DEBUG: Inside createPost Controller ---');
+        // console.log('1. Authenticated User ID (from token):', authorId);
+        // console.log('2. Initial req.body (text fields):', req.body);
         const { content } = req.body;
-        console.log('2. Destructured content:', content);
+        // console.log('3. Destructured content:', content);
 
         if (!authorId) {
             return res.status(401).json({ message: "Not authenticated." });
@@ -44,35 +46,28 @@ export const createPost = async (req: Request<{}, {}, CreatePostPayload>, res: R
 
         // 2. Якщо є файл, завантажуємо його в Cloudinary
         if (req.file) {
-            const file = req.file; // Зберігаємо файл у константу, щоб TypeScript не губив тип
-            // Завантажуємо буфер напряму в Cloudinary
-            const result = await new Promise<UploadApiResponse | undefined>((resolve, reject) => {
-                const uploadStream = cloudinary.uploader.upload_stream({
-                    folder: 'posts', // Опціонально: папка в Cloudinary
-                }, (error, result) => {
-                    if (error) return reject(error);
-                    resolve(result);
-                }).end(file.buffer); // Використовуємо константу
-            });
-
-            // Присвоюємо URL та ID, тільки якщо вони існують, щоб задовольнити `exactOptionalPropertyTypes`
-            if (result) {
-                postData.imageUrl = result.secure_url;
-                postData.imagePublicId = result.public_id;
-            }
+            // console.log('4. File detected. Uploading to Cloudinary. File info:', {
+            //     fieldname: req.file.fieldname,
+            //     originalname: req.file.originalname,
+            //     mimetype: req.file.mimetype,
+            //     size: req.file.size,
+            // });
+            const result = await uploadToCloudinary(req.file.buffer, 'posts');
+            // console.log('5. Cloudinary upload result:', result);
+            postData.imageUrl = result.secure_url;
+            postData.imagePublicId = result.public_id;
         }
 
-        console.log('3. Data before saving to DB:', postData);
+        // console.log('6. Final data object before saving to DB:', postData);
 
         // 3. Створюємо пост в базі даних
         const newPost = await Post.create(postData);
+        // console.log('7. Post successfully created in DB. ID:', newPost._id);
 
-        // 4. Відповідь
-        res.status(201).json({
-            message: "Post created successfully.",
-            post: newPost.toObject(),
-        });
+        // 4. Відповідь клієнту
+        res.status(201).json({ message: "Post created successfully.", post: newPost.toObject() });
     } catch (error) {
+        // console.error('--- ❌ ERROR in createPost Controller ---', error);
         next(error);
     }
 };
@@ -82,6 +77,7 @@ export const createPost = async (req: Request<{}, {}, CreatePostPayload>, res: R
  */
 export const getFeed = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        const userId = req.userId; // Отримуємо ID поточного користувача
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 10;
         const skip = (page - 1) * limit;
@@ -100,6 +96,21 @@ export const getFeed = async (req: Request, res: Response, next: NextFunction) =
                 },
             },
             { $unwind: '$authorInfo' },
+            // === ✨ ДОДАЄМО ІНФОРМАЦІЮ ПРО ЛАЙК ПОТОЧНОГО КОРИСТУВАЧА ===
+            {
+                $lookup: {
+                    from: 'likes',
+                    let: { postId: '$_id' },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: { $and: [{ $eq: ['$post', '$$postId'] }, { $eq: ['$user', new Types.ObjectId(userId)] }] },
+                            },
+                        },
+                    ],
+                    as: 'userLike',
+                },
+            },
             {
                 $project: {
                     _id: 1,
@@ -109,6 +120,7 @@ export const getFeed = async (req: Request, res: Response, next: NextFunction) =
                     imagePublicId: 1, // Повертаємо для можливих дій на фронтенді
                     createdAt: 1,
                     updatedAt: 1,
+                    isLiked: { $gt: [{ $size: '$userLike' }, 0] }, // true, якщо масив userLike не порожній
                     author: {
                         _id: '$authorInfo._id',
                         username: '$authorInfo.username',
