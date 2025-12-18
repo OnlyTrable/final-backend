@@ -1,6 +1,7 @@
 // src/controllers/user.controller.ts
 
 import type { Request, Response, NextFunction } from "express";
+import mongoose from 'mongoose';
 import User from "../db/models/User.model.js";
 import type { UpdateProfilePayload } from "../schemas/user.schemas.js";
 import HttpError from "../utils/HttpError.js";
@@ -10,36 +11,38 @@ import { uploadImageStream, deleteImage } from "../services/cloudinary.service.j
 /**
  * Отримує дані профілю аутентифікованого користувача.
  */
-export const getProfile = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
+export const getProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // Ми впевнені, що req.userId існує завдяки authenticate middleware
-    const userId = req.userId;
+    // 1. Отримуємо ID. Використовуємо оператор "!" або явну перевірку, 
+    // оскільки authenticate гарантує наявність userId.
+    const currentUserId = req.userId;
+    const targetId = req.params.id || currentUserId;
 
-    // 1. Шукаємо користувача, але цього разу БЕЗ пароля та токенів
-    const user = await User.findById(userId);
+    // Перевірка для TypeScript: якщо раптом ID відсутні — видаємо помилку
+    if (!targetId || !currentUserId) {
+        return res.status(401).json({ message: "User ID is required" });
+    }
+
+    const user = await User.findById(targetId);
 
     if (!user) {
-      // Теоретично, цього не повинно статися, якщо токен валідний і не відкликаний
       return res.status(404).json({ message: "User profile not found." });
     }
 
-    // 2. Повертаємо дані профілю
-    // user.toObject() автоматично видалить пароль, токени та __v (завдяки transformUser)
     const userResponse = user.toObject();
+
+    // Тепер TS впевнений, що обидва значення існують
+    const isOwner = targetId.toString() === currentUserId.toString();
 
     res.status(200).json({
       message: "User profile retrieved successfully.",
       user: userResponse,
+      isOwner: isOwner
     });
   } catch (error) {
     next(error);
   }
 };
-
 /**
  * Оновлює аватар користувача, завантажуючи його на Cloudinary.
  */
@@ -176,6 +179,111 @@ export const updateProfile = async (
     res.status(200).json({
       message: "User profile updated successfully.",
       user: userResponse,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+/**
+ * @route   GET /api/users/search
+ * @desc    Пошук користувачів за username або email
+ * @access  Private
+ */
+export const searchUsers = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        // Отримуємо пошуковий запит 'q' з query-параметрів
+        // і перетворюємо його на рядок для безпеки
+        const searchQuery = req.query.q as string;
+        const userId = req.userId; // Отримуємо ID поточного користувача
+
+        // Якщо запит порожній або відсутній, повертаємо порожній масив
+        if (!searchQuery || !searchQuery.trim()) {
+            return res.json([]);
+        }
+
+        // Створюємо регулярний вираз для пошуку без урахування регістру
+        const regex = new RegExp(searchQuery, 'i');
+
+        // Створюємо базовий фільтр для пошуку
+        const filter: any = {
+            _id: { $ne: userId }, // Виключаємо поточного користувача
+            $or: [{ username: { $regex: regex } }, { email: { $regex: regex } }],
+        };
+
+        // Шукаємо користувачів в базі даних
+        const users = await User.find(filter)
+        .limit(10) // Обмежуємо кількість результатів до 10
+        .select('username avatarUrl'); // Вибираємо тільки потрібні поля (використовуємо avatarUrl, як в інших контролерах)
+
+        // Логуємо знайденних користувачів в консоль бекенду
+        console.log('Search Result (Users Found):', users);
+
+        res.json(users);
+
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * Перемикає стан підписки (Follow/Unfollow) між поточним та цільовим користувачем.
+ */
+export const toggleFollow = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const currentUserId = req.userId; // Хто підписується
+    const { id: targetUserId } = req.params; // На кого підписується
+
+    if (!currentUserId || !targetUserId) {
+      return res.status(401).json({ message: "User IDs are required." });
+    }
+
+    if (currentUserId.toString() === targetUserId.toString()) {
+      return res.status(400).json({ message: "You cannot follow yourself." });
+    }
+
+    const targetUser = await User.findById(targetUserId);
+    const currentUser = await User.findById(currentUserId);
+
+    if (!targetUser || !currentUser) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // Перевіряємо, чи вже є підписка (порівнюємо як рядки)
+    const isFollowing = currentUser.following.some(
+      (id: any) => id.toString() === targetUserId.toString()
+    );
+
+    if (isFollowing) {
+      // --- UNFOLLOW ---
+      // Видаляємо ID з масивів
+      currentUser.following = currentUser.following.filter(
+        (id: any) => id.toString() !== targetUserId.toString()
+      );
+      targetUser.followers = targetUser.followers.filter(
+        (id: any) => id.toString() !== currentUserId.toString()
+      );
+
+      // Оновлюємо лічильники
+      currentUser.followingCount = Math.max(0, currentUser.followingCount - 1);
+      targetUser.followersCount = Math.max(0, targetUser.followersCount - 1);
+    } else {
+      // --- FOLLOW ---
+      // Додаємо ID в масиви
+      currentUser.following.push(targetUserId as any);
+      targetUser.followers.push(currentUserId as any);
+
+      // Збільшуємо лічильники
+      currentUser.followingCount += 1;
+      targetUser.followersCount += 1;
+    }
+
+    await currentUser.save();
+    await targetUser.save();
+
+    res.status(200).json({
+      message: isFollowing ? "Unfollowed successfully" : "Followed successfully",
+      isFollowing: !isFollowing,
+      followersCount: targetUser.followersCount, // Повертаємо для оновлення UI
     });
   } catch (error) {
     next(error);

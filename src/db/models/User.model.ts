@@ -12,6 +12,8 @@ export interface UserDocument extends Document {
   website: string;
   about: string;
   role: string;
+  followers: Schema.Types.ObjectId[]; // або string
+  following: Schema.Types.ObjectId[]; // в кожного типа свої осбливості
   followersCount: number;
   followingCount: number;
   postsCount: number;
@@ -73,6 +75,16 @@ const userSchema = new Schema<UserDocument>(
       enum: ["User", "Admin", "Moderator"], // Можливі ролі
       default: "User",
       required: true,
+    },
+    followers: {
+      type: [Schema.Types.ObjectId],
+      ref: "User",
+      default: [],
+    },
+    following: {
+      type: [Schema.Types.ObjectId],
+      ref: "User",
+      default: [],
     },
     followersCount: {
       type: Number,
