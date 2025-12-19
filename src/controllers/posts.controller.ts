@@ -148,3 +148,18 @@ export const getFeed = async (req: Request, res: Response, next: NextFunction) =
         next(error);
     }
 };
+
+export const getPosts = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const posts = await Post.find()
+            .populate({
+                path: 'author',           // 👈 Саме 'author', як у твоїй базі
+                select: 'username avatarUrl' // 👈 Беремо тільки потрібні поля
+            })
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({ posts });
+    } catch (error) {
+        res.status(500).json({ message: "Помилка сервера" });
+    }
+};

@@ -18,9 +18,9 @@ const userRouter: Router = Router();
 
 // DEBUG: Логуємо всі запити, що доходять до userRouter
 userRouter.use((req, res, next) => {
-  console.log(
-    `[UserRouter] Method: ${req.method}, Path: ${req.path}, OriginalUrl: ${req.originalUrl}`,
-  );
+  // console.log(
+  //   `[UserRouter] Method: ${req.method}, Path: ${req.path}, OriginalUrl: ${req.originalUrl}`,
+  // );
   next();
 });
 
